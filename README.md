@@ -23,19 +23,6 @@ A Streamlit-based web application for visualizing and analyzing energy consumpti
 - Python 3.7+
 - pip (Python package installer)
 
-## Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/energy-consumption-dashboard.git
-cd energy-consumption-dashboard
-```
-
-2. Install required packages:
-```bash
-pip install -r requirements.txt
-```
-
 ## Required Dependencies
 
 - pandas
