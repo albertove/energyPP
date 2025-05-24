@@ -51,9 +51,7 @@ streamlit run app.py
 
 2. Access the dashboard through your web browser (typically at http://localhost:8501)
 
-3. Login credentials:
-   - Username: admin
-   - Password: admin123
+3. Login with your credentials
 
 4. Use the sidebar to:
    - Upload new data files
