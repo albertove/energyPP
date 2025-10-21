@@ -44,12 +44,37 @@ current_year = datetime.now().year
 
 # Load the Excel files from data folder
 data_folder = "data"
-file_2020 = os.path.join(data_folder, "El-2020-01-01-2020-12-31.xlsx")
-file_2021 = os.path.join(data_folder, "El-2021-01-01-2021-12-31.xlsx")
-file_2022 = os.path.join(data_folder, "El-2022-01-01-2022-12-31.xlsx")
-file_2023 = os.path.join(data_folder, "El-2023-01-01-2023-12-31.xlsx")
-file_2024 = os.path.join(data_folder, 'El-2024-01-01-2024-12-31.xlsx')
-file_current = os.path.join(data_folder, f'El-{current_year}-01-01-{current_year}-12-31.xlsx')
+
+# Function to generate file path for a given year
+def get_file_path(year):
+    return os.path.join(data_folder, f"El-{year}-01-01-{year}-12-31.xlsx")
+
+# Function to get all available years from existing files
+def get_available_years():
+    """Get all years that have data files available"""
+    available_years = []
+    try:
+        if os.path.exists(data_folder):
+            files = [f for f in os.listdir(data_folder) if f.endswith('.xlsx')]
+            for file in files:
+                # Extract year from filename pattern: El-YYYY-01-01-YYYY-12-31.xlsx
+                year_match = re.search(r'El-(\d{4})-01-01-\d{4}-12-31\.xlsx', file)
+                if year_match:
+                    year = int(year_match.group(1))
+                    available_years.append(year)
+    except Exception as e:
+        st.warning(f"Error reading data folder: {str(e)}")
+    
+    return sorted(available_years)
+
+# Get all available years
+available_years = get_available_years()
+
+# Generate file paths for all available years
+file_paths = [get_file_path(year) for year in available_years]
+
+# Current year file path
+file_current = get_file_path(current_year)
 
 # Add logout button in sidebar
 with st.sidebar:
@@ -57,8 +82,9 @@ with st.sidebar:
         st.session_state.logged_in = False
         st.rerun()
     
-    st.header("Update Current Year Data")
+    st.header("📅 Data Management")
     st.write(f"Current year: {current_year}")
+    
     
     # Add refresh button to reload data
     if st.button("🔄 Refresh Dashboard Data"):
@@ -70,11 +96,35 @@ with st.sidebar:
     if st.session_state.get('file_uploaded', False):
         st.success("✅ File uploaded successfully! Click 'Refresh Dashboard Data' to see the updated charts.")
     
-    uploaded_file = st.file_uploader(
-        f"Upload new data for {current_year}",
-        type=['xlsx'],
-        help=f"Upload the Excel file named 'El-{current_year}-01-01-{current_year}-12-31.xlsx'"
+    # File upload section
+    st.subheader("📤 Upload/Update Data")
+    
+    # Create list of all possible years (2020 to current year)
+    all_possible_years = list(range(2020, current_year + 1))
+    
+    # Allow user to select which year to upload/update
+    upload_year = st.selectbox(
+        "Select year to upload/update:",
+        options=all_possible_years,
+        help="Choose the year for which you want to upload or update data"
     )
+    
+    
+    uploaded_file = st.file_uploader(
+        f"Upload data for {upload_year}",
+        type=['xlsx'],
+        help=f"Upload the Excel file named 'El-{upload_year}-01-01-{upload_year}-12-31.xlsx'"
+    )
+    
+    # Add confirmation for replacing existing data
+    if uploaded_file is not None and upload_year in available_years:
+        st.warning("⚠️ **WARNING: This will replace existing data!**")
+        confirm_replace = st.checkbox(
+            f"I understand that this will replace the existing data for {upload_year}",
+            key=f"confirm_replace_{upload_year}"
+        )
+        if not confirm_replace:
+            st.stop()
     
     if uploaded_file is not None:
         try:
@@ -96,8 +146,9 @@ with st.sidebar:
                 st.error("Please ensure the file is a valid Excel file with a 'Timvärden' sheet.")
                 st.stop()
             
-            # Save the file
-            with open(file_current, 'wb') as f:
+            # Save the file with the selected year
+            target_file_path = get_file_path(upload_year)
+            with open(target_file_path, 'wb') as f:
                 f.write(uploaded_file.getvalue())
             
             # Process the new data for Sammanfatning sheet
@@ -129,31 +180,37 @@ with st.sidebar:
             result = result.merge(avg_consumption, left_on='Week Number', right_on='Week')
             
             # Add Year column
-            result['Year'] = current_year
+            result['Year'] = upload_year
             
             # Save to Sammanfatning sheet
             try:
-                with pd.ExcelWriter(file_current, mode='a', engine='openpyxl', if_sheet_exists='replace') as writer:
+                with pd.ExcelWriter(target_file_path, mode='a', engine='openpyxl', if_sheet_exists='replace') as writer:
                     result.to_excel(writer, sheet_name='Sammanfatning', index=False)
             except Exception as write_error:
                 st.error(f"Error writing to Excel file: {str(write_error)}")
                 st.error("The file may be corrupted or in use by another application.")
                 st.stop()
             
-            st.success(f"Successfully updated data and Sammanfatning sheet for {current_year}!")
+            # Determine if this was a replacement or new upload
+            if upload_year in available_years:
+                st.success(f"✅ **Successfully replaced** data and Sammanfatning sheet for {upload_year}!")
+                action_type = "replaced"
+            else:
+                st.success(f"✅ **Successfully added** data and Sammanfatning sheet for {upload_year}!")
+                action_type = "added"
             
             # Add download button after successful update
-            with open(file_current, 'rb') as f:
+            with open(target_file_path, 'rb') as f:
                 st.download_button(
-                    label=f"Download Updated {current_year} Data",
+                    label=f"Download {action_type.title()} {upload_year} Data",
                     data=f,
-                    file_name=file_current,
+                    file_name=os.path.basename(target_file_path),
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
             
             # Set a flag to indicate successful upload
             st.session_state.file_uploaded = True
-            st.info("File uploaded successfully! Click 'Refresh Dashboard Data' to see the updated charts.")
+            st.info(f"File {action_type} successfully! Click 'Refresh Dashboard Data' to see the updated charts.")
         except Exception as e:
             st.error(f"Error updating file: {str(e)}")
     
@@ -204,28 +261,41 @@ with st.sidebar:
         os.makedirs(data_folder, exist_ok=True)
         st.rerun()
 
-# Define file paths (excluding current year file if it doesn't exist)
-file_paths = [file_2020, file_2021, file_2022, file_2023, file_2024]
-
-# Load the specific sheet "Timvärden" from all files
+# Load the specific sheet "Timvärden" from all available files
 data_frames = []
+loaded_years = []
+
 for file_path in file_paths:
     try:
         df = pd.read_excel(file_path, sheet_name="Timvärden", header=16)
         data_frames.append(df)
+        
+        # Extract year from file path for tracking
+        year_match = re.search(r'El-(\d{4})-01-01-\d{4}-12-31\.xlsx', file_path)
+        if year_match:
+            loaded_years.append(int(year_match.group(1)))
+            
     except FileNotFoundError:
         st.warning(f"File not found: {file_path}")
     except Exception as e:
         st.warning(f"Error reading {file_path}: {str(e)}")
 
-# Try to load current year file if it exists
-try:
-    current_year_df = pd.read_excel(file_current, sheet_name="Timvärden", header=16)
-    data_frames.append(current_year_df)
-except FileNotFoundError:
-    st.info(f"Current year file ({file_current}) not found. You can upload it using the sidebar.")
-except Exception as e:
-    st.warning(f"Error reading current year file ({file_current}): {str(e)}")
+# Try to load current year file if it exists and not already loaded
+if current_year not in loaded_years:
+    try:
+        current_year_df = pd.read_excel(file_current, sheet_name="Timvärden", header=16)
+        data_frames.append(current_year_df)
+        loaded_years.append(current_year)
+    except FileNotFoundError:
+        st.info(f"Current year file ({file_current}) not found. You can upload it using the sidebar.")
+    except Exception as e:
+        st.warning(f"Error reading current year file ({file_current}): {str(e)}")
+
+# Show loaded years information
+if loaded_years:
+    st.success(f"📊 Loaded data for years: {', '.join(map(str, sorted(loaded_years)))}")
+else:
+    st.error("No data files could be loaded.")
 
 # Check if we have any data to work with
 if not data_frames:
@@ -322,4 +392,37 @@ weekly_fig.update_traces(selector=dict(name='Consumption_Min'), text=weekly_data
 weekly_fig.update_traces(selector=dict(name='Consumption_Max'), text=weekly_data['Max Day'],
                         textposition='inside', textangle=-90)
 st.plotly_chart(weekly_fig, use_container_width=True)
+
+# Create multi-year weekly comparison table
+st.subheader("📈 Multi-Year Weekly Comparison")
+
+# Create multi-year comparison table
+multi_year_stats = []
+for year in sorted(valid_years):
+    # Skip year 0 (invalid data)
+    if year == 0:
+        continue
+        
+    year_weekly_data = weekly_consumption[weekly_consumption['Year'] == year]
+    if not year_weekly_data.empty:
+        avg_min = year_weekly_data['Consumption_Min'].mean()
+        avg_max = year_weekly_data['Consumption_Max'].mean()
+        overall_min = year_weekly_data['Consumption_Min'].min()
+        overall_max = year_weekly_data['Consumption_Max'].max()
+        
+        multi_year_stats.append({
+            'Year': year,
+            'Avg Min (kWh)': f"{avg_min:.2f}",
+            'Avg Max (kWh)': f"{avg_max:.2f}",
+            'Overall Min (kWh)': f"{overall_min:.2f}",
+            'Overall Max (kWh)': f"{overall_max:.2f}",
+            'Weeks': len(year_weekly_data)
+        })
+
+if multi_year_stats:
+    multi_year_df = pd.DataFrame(multi_year_stats)
+    st.dataframe(multi_year_df, use_container_width=True, hide_index=True)
+    
+else:
+    st.warning("No weekly data available for comparison")
 

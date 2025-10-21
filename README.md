@@ -16,10 +16,11 @@ A comprehensive Streamlit-based web application for visualizing and analyzing en
 - **Real-time Updates**: Dynamic charts that update with new data
 
 ### 📈 Advanced Analytics
-- Weekly consumption statistics (min, max, average)
-- Monthly aggregation and trend analysis
-- Year-over-year consumption comparisons
-- Interactive hover information and data points
+- **Multi-Year Weekly Statistics**: Comprehensive min/max consumption analysis with averages
+- **Statistical Measures**: Average min/max consumption, overall extremes
+- **Monthly Aggregation**: Monthly trend analysis and comparisons
+- **Year-over-Year Comparisons**: Multi-year weekly statistics comparison
+- **Interactive Data Points**: Hover information and detailed breakdowns
 
 ### 📤 Data Management
 - **File Upload**: Easy upload of new Excel data files
@@ -30,9 +31,10 @@ A comprehensive Streamlit-based web application for visualizing and analyzing en
 
 ### 🔄 Real-time Features
 - **Refresh Dashboard**: Update visualizations with new data
-- **Dynamic Year Support**: Automatic detection of current year
+- **Dynamic Year Support**: Automatic detection of current year and available data files
 - **File Status Indicators**: Visual feedback for upload operations
 - **Error Handling**: Robust error management and user feedback
+- **Year Transition Management**: Automatic handling of year transitions (e.g., 2025 → 2026)
 
 ## 📋 Prerequisites
 
@@ -105,12 +107,17 @@ streamlit run app.py
 - **Year Selection**: Choose specific year for detailed analysis
 - **Yearly Consumption Chart**: Interactive time series for selected year
 - **Weekly Analysis Chart**: Min/max consumption per week with day indicators
+- **Multi-Year Comparison Table**: Compare weekly statistics across different years
 
 #### 🔧 Sidebar Functions
-- **File Upload**: Upload new Excel files for current year
+- **File Upload/Update**: Upload Excel files for any year (current or historical)
+- **Year Selection**: Choose which year to upload or update data for (2020 to current year)
+- **Data Replacement**: Replace existing year data with new files
+- **Replacement Confirmation**: Safety checkbox to confirm data replacement
 - **Refresh Data**: Update dashboard with latest data
 - **File Management**: View and delete existing data files
 - **Download**: Export updated data files
+- **Year Validation**: Automatic checking for missing previous year data
 - **Logout**: Secure session termination
 
 #### 📁 File Management
@@ -118,6 +125,10 @@ streamlit run app.py
 - **File List**: View all available data files by year
 - **Delete Files**: Remove unwanted data files
 - **Download Updated Files**: Export processed data
+
+#### 📊 Data Tables & Statistics
+- **Multi-Year Comparison Table**: Compare weekly statistics across all available years
+- **Statistical Measures**: Average min/max consumption, overall extremes
 
 ## 🔧 Technical Details
 
@@ -128,12 +139,14 @@ streamlit run app.py
 - **openpyxl** (≥3.1.0): Excel file handling
 
 ### Data Processing Pipeline
-1. **File Loading**: Reads Excel files from `data/` directory
-2. **Data Validation**: Checks file format and data integrity
-3. **Data Transformation**: Converts timestamps and calculates derived fields
-4. **Statistical Analysis**: Computes weekly min/max/average consumption
-5. **Visualization**: Generates interactive charts with Plotly
-6. **Summary Generation**: Creates "Sammanfatning" sheet with processed data
+1. **Dynamic File Discovery**: Automatically scans `data/` directory for available years
+2. **File Loading**: Reads Excel files from `data/` directory based on discovered files
+3. **Data Validation**: Checks file format and data integrity
+4. **Data Transformation**: Converts timestamps and calculates derived fields
+5. **Statistical Analysis**: Computes weekly min/max/average consumption
+6. **Visualization**: Generates interactive charts with Plotly
+7. **Summary Generation**: Creates "Sammanfatning" sheet with processed data
+8. **Year Transition Handling**: Automatically manages year transitions and missing data
 
 ### File Structure
 ```
@@ -160,6 +173,37 @@ energyPP/
 - HTTPS encryption
 - Input validation and sanitization
 
+## 🔄 Year Transition Management
+
+### Automatic Year Handling
+The application automatically handles year transitions and manages data files dynamically:
+
+#### **For 2026 Usage (Example)**
+When the application runs in 2026:
+1. **Current Year Detection**: Automatically detects 2026 as the current year
+2. **Available Years Scan**: Scans the `data/` folder for all available year files
+3. **Missing Year Detection**: Shows warning if 2025 data is missing
+4. **Flexible Upload**: Allows uploading data for any year (2025, 2026, or historical years)
+5. **Dynamic Loading**: Loads all available years automatically without hardcoded paths
+
+#### **Year Transition Workflow**
+```
+2025 → 2026 Transition:
+├── ✅ 2025 data exists → Shows success message
+├── ⚠️ 2025 data missing → Shows warning to upload first
+├── 📤 Upload 2025 data → Select year 2025 in dropdown
+├── 📤 Upload 2026 data → Select year 2026 in dropdown
+└── 🔄 Refresh → Updates dashboard with all available years
+```
+
+#### **Dynamic File Management**
+- **No Hardcoded Years**: Application discovers years automatically
+- **Flexible Upload/Update**: Upload or replace data for any year from 2020 to current year
+- **Data Replacement Safety**: Confirmation checkbox when replacing existing data
+- **Missing Data Alerts**: Warns when previous year data is missing
+- **Automatic Integration**: New years are automatically included in visualizations
+- **Clear Status Indicators**: Shows whether you're adding new data or replacing existing data
+
 ## 🐛 Troubleshooting
 
 ### Common Issues
@@ -169,6 +213,16 @@ energyPP/
 - Check that "Timvärden" sheet exists
 - Verify data starts from row 17
 - Confirm required columns are present
+
+**Year Transition Issues**:
+- If previous year data is missing, upload it first
+- Use the year selector in the sidebar to choose the correct year
+- Check that file naming follows the exact pattern: `El-YYYY-01-01-YYYY-12-31.xlsx`
+
+**Data Replacement Issues**:
+- When replacing existing data, make sure to check the confirmation checkbox
+- The system will warn you before replacing existing year data
+- Always verify the year selection before uploading
 
 **Data Display Issues**:
 - Click "Refresh Dashboard Data" after uploading
