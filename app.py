@@ -4,6 +4,7 @@ import plotly.express as px
 from datetime import datetime
 import os
 import io
+import re
 
 # Set page config
 st.set_page_config(page_title="Energy Consumption Dashboard", layout="wide")
@@ -41,13 +42,14 @@ if not st.session_state.logged_in:
 # Get current year
 current_year = datetime.now().year
 
-# Load the Excel files
-file_2020 = "El-2020-01-01-2020-12-31.xlsx"
-file_2021 = "El-2021-01-01-2021-12-31.xlsx"
-file_2022 = "El-2022-01-01-2022-12-31.xlsx"
-file_2023 = "El-2023-01-01-2023-12-31.xlsx"
-file_2024 = 'El-2024-01-01-2024-12-31.xlsx'
-file_current = f'El-{current_year}-01-01-{current_year}-12-31.xlsx'
+# Load the Excel files from data folder
+data_folder = "data"
+file_2020 = os.path.join(data_folder, "El-2020-01-01-2020-12-31.xlsx")
+file_2021 = os.path.join(data_folder, "El-2021-01-01-2021-12-31.xlsx")
+file_2022 = os.path.join(data_folder, "El-2022-01-01-2022-12-31.xlsx")
+file_2023 = os.path.join(data_folder, "El-2023-01-01-2023-12-31.xlsx")
+file_2024 = os.path.join(data_folder, 'El-2024-01-01-2024-12-31.xlsx')
+file_current = os.path.join(data_folder, f'El-{current_year}-01-01-{current_year}-12-31.xlsx')
 
 # Add logout button in sidebar
 with st.sidebar:
@@ -58,6 +60,16 @@ with st.sidebar:
     st.header("Update Current Year Data")
     st.write(f"Current year: {current_year}")
     
+    # Add refresh button to reload data
+    if st.button("🔄 Refresh Dashboard Data"):
+        if 'file_uploaded' in st.session_state:
+            del st.session_state.file_uploaded
+        st.rerun()
+    
+    # Show upload status
+    if st.session_state.get('file_uploaded', False):
+        st.success("✅ File uploaded successfully! Click 'Refresh Dashboard Data' to see the updated charts.")
+    
     uploaded_file = st.file_uploader(
         f"Upload new data for {current_year}",
         type=['xlsx'],
@@ -66,8 +78,23 @@ with st.sidebar:
     
     if uploaded_file is not None:
         try:
-            # Read the uploaded file
-            new_data = pd.read_excel(uploaded_file, sheet_name="Timvärden", header=16)
+            # Validate file type
+            if not uploaded_file.name.endswith(('.xlsx', '.xls')):
+                st.error("Please upload a valid Excel file (.xlsx or .xls)")
+                st.stop()
+            
+            # Check if file is not empty
+            if uploaded_file.size == 0:
+                st.error("The uploaded file is empty. Please upload a valid Excel file.")
+                st.stop()
+            
+            # Read the uploaded file with additional error handling
+            try:
+                new_data = pd.read_excel(uploaded_file, sheet_name="Timvärden", header=16)
+            except Exception as excel_error:
+                st.error(f"Error reading Excel file: {str(excel_error)}")
+                st.error("Please ensure the file is a valid Excel file with a 'Timvärden' sheet.")
+                st.stop()
             
             # Save the file
             with open(file_current, 'wb') as f:
@@ -105,8 +132,13 @@ with st.sidebar:
             result['Year'] = current_year
             
             # Save to Sammanfatning sheet
-            with pd.ExcelWriter(file_current, mode='a', engine='openpyxl', if_sheet_exists='replace') as writer:
-                result.to_excel(writer, sheet_name='Sammanfatning', index=False)
+            try:
+                with pd.ExcelWriter(file_current, mode='a', engine='openpyxl', if_sheet_exists='replace') as writer:
+                    result.to_excel(writer, sheet_name='Sammanfatning', index=False)
+            except Exception as write_error:
+                st.error(f"Error writing to Excel file: {str(write_error)}")
+                st.error("The file may be corrupted or in use by another application.")
+                st.stop()
             
             st.success(f"Successfully updated data and Sammanfatning sheet for {current_year}!")
             
@@ -119,9 +151,58 @@ with st.sidebar:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
             
-            st.rerun()  # Rerun to refresh the data
+            # Set a flag to indicate successful upload
+            st.session_state.file_uploaded = True
+            st.info("File uploaded successfully! Click 'Refresh Dashboard Data' to see the updated charts.")
         except Exception as e:
             st.error(f"Error updating file: {str(e)}")
+    
+    # File Management Section
+    st.header("📁 File Management")
+    
+    # List files in data folder
+    try:
+        data_files = [f for f in os.listdir(data_folder) if f.endswith('.xlsx')]
+        if data_files:
+            st.write("**Files in data folder:**")
+            for file in sorted(data_files):
+                # Extract year from filename (e.g., "El-2020-01-01-2020-12-31.xlsx" -> "2020")
+                try:
+                    # Look for 4-digit year pattern in filename
+                    year_match = re.search(r'\b(20\d{2})\b', file)
+                    if year_match:
+                        year = year_match.group(1)
+                        display_name = f"📄 Year {year}"
+                    else:
+                        display_name = f"📄 {file}"
+                except:
+                    display_name = f"📄 {file}"
+                
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(display_name)
+                with col2:
+                    # Get the year for the delete button
+                    try:
+                        year_match = re.search(r'\b(20\d{2})\b', file)
+                        delete_year = year_match.group(1) if year_match else file
+                    except:
+                        delete_year = file
+                    
+                    if st.button("🗑️", key=f"delete_{file}", help=f"Delete Year {delete_year}"):
+                        try:
+                            file_path = os.path.join(data_folder, file)
+                            os.remove(file_path)
+                            st.success(f"Deleted Year {delete_year}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error deleting Year {delete_year}: {str(e)}")
+        else:
+            st.info("No Excel files found in data folder.")
+    except FileNotFoundError:
+        st.warning("Data folder not found. Creating it now...")
+        os.makedirs(data_folder, exist_ok=True)
+        st.rerun()
 
 # Define file paths (excluding current year file if it doesn't exist)
 file_paths = [file_2020, file_2021, file_2022, file_2023, file_2024]
@@ -134,6 +215,8 @@ for file_path in file_paths:
         data_frames.append(df)
     except FileNotFoundError:
         st.warning(f"File not found: {file_path}")
+    except Exception as e:
+        st.warning(f"Error reading {file_path}: {str(e)}")
 
 # Try to load current year file if it exists
 try:
@@ -141,6 +224,13 @@ try:
     data_frames.append(current_year_df)
 except FileNotFoundError:
     st.info(f"Current year file ({file_current}) not found. You can upload it using the sidebar.")
+except Exception as e:
+    st.warning(f"Error reading current year file ({file_current}): {str(e)}")
+
+# Check if we have any data to work with
+if not data_frames:
+    st.error("No valid Excel files found. Please ensure you have at least one valid Excel file in the correct format.")
+    st.stop()
 
 # Combine all dataframes
 combined_data = pd.concat(data_frames, ignore_index=True)
